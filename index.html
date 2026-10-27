@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Domino Hóa Học</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            overscroll-behavior-y: contain; /* Prevent pull-to-refresh on mobile */
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Domino Card Styling */
+        .domino {
+            display: flex;
+            width: 160px;
+            height: 70px;
+            background-color: #ffffff;
+            border: 2px solid #bae6fd; /* Sky-200 */
+            border-radius: 0.5rem;
+            box-shadow: 0 4px 6px -1px rgba(14, 165, 233, 0.1), 0 2px 4px -1px rgba(14, 165, 233, 0.06);
+            cursor: pointer;
+            transition: transform 0.1s, box-shadow 0.2s, border-color 0.2s;
+            user-select: none;
+            touch-action: manipulation;
+        }
+
+        .domino:active {
+            transform: scale(0.95);
+        }
+
+        .domino-half {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 4px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            line-height: 1.2;
+            word-wrap: break-word;
+        }
+
+        .divider {
+            width: 2px;
+            background-color: #e0f2fe; /* Sky-100 */
+            height: 100%;
+        }
+
+        /* Specific Text Styling */
+        .text-start { color: #f97316; font-weight: 800; font-size: 1rem; text-transform: uppercase; } /* Orange */
+        .text-end { color: #ef4444; font-weight: 800; font-size: 1rem; text-transform: uppercase; } /* Red */
+        .text-formula { color: #0284c7; font-weight: 700; font-size: 0.9rem; } /* Sky-600 */
+        .text-name { color: #334155; } /* Slate-700 */
+        
+        /* Ensure subscripts look good */
+        sub { font-size: 0.7em; bottom: -0.2em; }
+
+        /* Animations */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20% { transform: translateX(-6px) rotate(-2deg); }
+            40% { transform: translateX(6px) rotate(2deg); }
+            60% { transform: translateX(-6px) rotate(-2deg); }
+            80% { transform: translateX(6px) rotate(2deg); }
+        }
+
+        .error-shake {
+            animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
+            border-color: #ef4444 !important; /* Red-500 */
+            background-color: #fef2f2 !important;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+        }
+
+        .error-shake .divider { background-color: #fca5a5 !important; }
+
+        @keyframes popIn {
+            0% { transform: scale(0.8); opacity: 0; }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
+        .pop-in {
+            animation: popIn 0.3s ease-out forwards;
+        }
+
+        .success-highlight {
+            border-color: #f97316 !important; /* Orange highlight */
+            box-shadow: 0 0 15px rgba(249, 115, 22, 0.6);
+            transition: border-color 0.3s, box-shadow 0.3s;
+        }
+
+        /* Board layout */
+        .board-wrapper {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        
+        .board-wrapper > .domino-container:not(:last-child)::after {
+            content: '→';
+            color: #94a3b8;
+            margin-left: 8px;
+            font-weight: bold;
+        }
+
+        .domino-container {
+            display: inline-flex;
+            align-items: center;
+        }
+
+        /* Hand Layout */
+        #hand-area {
+            scrollbar-width: none; /* Firefox */
+        }
+        #hand-area::-webkit-scrollbar {
+            display: none; /* Safari and Chrome */
+        }
+    </style>
+</head>
+<body class="bg-slate-50 flex flex-col h-screen overflow-hidden">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm py-3 px-4 flex justify-between items-center z-10 relative">
+        <div class="flex items-center gap-2">
+            <div class="w-8 h-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-600 font-bold text-xl">
+                💊
+            </div>
+            <h1 class="text-xl font-extrabold text-sky-900 tracking-tight">Chem<span class="text-orange-500">Domino</span></h1>
+        </div>
+        <div class="text-sm font-semibold text-sky-600 bg-sky-50 px-3 py-1 rounded-full border border-sky-100 shadow-inner">
+            <span id="progress-count">0</span> / 15
+        </div>
+    </header>
+
+    <!-- Main Game Area -->
+    <main class="flex-1 flex flex-col h-full overflow-hidden">
+        
+        <!-- Board Area (Top) -->
+        <section class="flex-1 flex flex-col p-4 bg-sky-50 relative overflow-hidden">
+            <div class="flex items-center gap-2 mb-2">
+                <h2 class="text-sm font-bold text-sky-800 uppercase tracking-wider">Khu vực ghép thẻ</h2>
+            </div>
+            
+            <div id="board-scroll" class="flex-1 bg-white border-2 border-sky-100 rounded-2xl shadow-inner p-4 overflow-y-auto w-full relative">
+                <!-- Empty State -->
+                <div id="empty-state" class="absolute inset-0 flex flex-col items-center justify-center text-sky-300 pointer-events-none transition-opacity duration-300">
+                    <svg class="w-16 h-16 mb-2 opacity-50" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                    <p class="font-medium text-center">Bắt đầu bằng thẻ <br><strong class="text-orange-400">START</strong></p>
+                </div>
+                
+                <!-- Board Cards Go Here -->
+                <div id="board-container" class="board-wrapper relative z-10 pb-4"></div>
+            </div>
+        </section>
+
+        <!-- Hand Area (Bottom) -->
+        <section class="h-2/5 min-h-[280px] bg-sky-100/50 border-t-2 border-sky-200 flex flex-col shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] relative z-10">
+            <div class="px-4 py-2 flex justify-between items-center bg-white/50 backdrop-blur-sm border-b border-sky-100">
+                <h2 class="text-sm font-bold text-sky-800 uppercase tracking-wider">Thẻ trên tay</h2>
+                <button onclick="initGame()" class="text-xs font-semibold text-sky-600 bg-sky-100 hover:bg-sky-200 px-3 py-1 rounded-full transition-colors">
+                    🔄 Xáo lại
+                </button>
+            </div>
+            
+            <div id="hand-area" class="flex-1 overflow-y-auto p-4">
+                <div id="hand-container" class="flex flex-wrap justify-center gap-3 pb-8">
+                    <!-- Hand Cards Go Here -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Victory Modal -->
+    <div id="victory-modal" class="fixed inset-0 bg-sky-900/40 flex items-center justify-center hidden z-50 opacity-0 transition-opacity duration-300 backdrop-blur-sm">
+        <div id="victory-box" class="bg-white rounded-3xl p-8 max-w-sm w-[90%] text-center transform scale-90 transition-all duration-500 shadow-2xl border-4 border-orange-400">
+            <div class="text-6xl mb-4 animate-bounce">🏆</div>
+            <h2 class="text-2xl font-extrabold text-sky-800 mb-2">Tuyệt Vời!</h2>
+            <p class="text-slate-600 font-medium mb-6">Bạn đã ghép thành công toàn bộ chuỗi Domino Hóa Học.</p>
+            <button onclick="initGame()" class="w-full bg-gradient-to-r from-orange-400 to-orange-500 hover:from-orange-500 hover:to-orange-600 text-white font-bold py-3 px-6 rounded-xl shadow-lg active:scale-95 transition-all">
+                Chơi Lại Lần Nữa
+            </button>
+        </div>
+    </div>
+
+    <!-- JavaScript Logic & Audio Engine -->
+    <script>
+        // --- DATA ---
+        // Pre-formatted with HTML sub tags for proper chemical formula display
+        const rawSequence = [
+            { left: "START", right: "Ca", lClass: "text-start", rClass: "text-formula" },
+            { left: "Calci", right: "FeO", lClass: "text-name", rClass: "text-formula" },
+            { left: "Sắt(II) oxyd", right: "P<sub>2</sub>O<sub>5</sub>", lClass: "text-name", rClass: "text-formula" },
+            { left: "Diphosphor pentoxyd", right: "KOH", lClass: "text-name", rClass: "text-formula" },
+            { left: "Kali hydroxyd", right: "H<sub>2</sub>SO<sub>4</sub>", lClass: "text-name", rClass: "text-formula" },
+            { left: "Acid sulfuric", right: "Na<sub>2</sub>SO<sub>4</sub>", lClass: "text-name", rClass: "text-formula" },
+            { left: "Natri sulfat", right: "HCl", lClass: "text-name", rClass: "text-formula" },
+            { left: "Acid hydrocloric", right: "NaCl", lClass: "text-name", rClass: "text-formula" },
+            { left: "Natri clorid", right: "Cu(OH)<sub>2</sub>", lClass: "text-name", rClass: "text-formula" },
+            { left: "Đồng(II) hydroxyd", right: "KMnO<sub>4</sub>", lClass: "text-name", rClass: "text-formula" },
+            { left: "Kali permanganat", right: "H<sub>2</sub>S", lClass: "text-name", rClass: "text-formula" },
+            { left: "Acid hydrosulforic", right: "CaS", lClass: "text-name", rClass: "text-formula" },
+            { left: "Calci sulfid", right: "CO<sub>2</sub>", lClass: "text-name", rClass: "text-formula" },
+            { left: "Carbon dioxyd", right: "Fe<sub>2</sub>O<sub>3</sub>", lClass: "text-name", rClass: "text-formula" },
+            { left: "Sắt(III) oxyd", right: "THE END", lClass: "text-name", rClass: "text-end" }
+        ];
+
+        // --- WEB AUDIO API SYNTHESIZER ---
+        let audioCtx = null;
+
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+        }
+
+        function playTone(freq, type, duration, volume = 0.1) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            
+            gainNode.gain.setValueAtTime(volume, audioCtx.currentTime);
+            // Fade out slightly to avoid clicks
+            gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+            
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            
+            osc.start();
+            osc.stop(audioCtx.currentTime + duration);
+        }
+
+        const sfx = {
+            click: () => {
+                initAudio();
+                playTone(400, 'sine', 0.05, 0.05); // Short soft pop
+            },
+            success: () => {
+                initAudio();
+                // Chime sequence
+                playTone(880, 'sine', 0.1, 0.1); 
+                setTimeout(() => playTone(1108.73, 'sine', 0.15, 0.1), 80);
+            },
+            error: () => {
+                initAudio();
+                // Low buzz
+                playTone(150, 'sawtooth', 0.3, 0.1);
+                setTimeout(() => playTone(140, 'sawtooth', 0.3, 0.1), 100);
+            },
+            victory: () => {
+                initAudio();
+                // Happy fanfare arpeggio
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, i) => {
+                    setTimeout(() => playTone(freq, 'square', 0.15, 0.08), i * 120);
+                });
+                setTimeout(() => playTone(1046.50, 'square', 0.4, 0.08), notes.length * 120);
+            }
+        };
+
+        // --- GAME LOGIC ---
+        let cards = [];
+        let handCards = [];
+        let boardCards = [];
+        let expectedNextId = 0;
+        let isAnimating = false; // Prevent rapid clicking during error animation
+
+        const handContainer = document.getElementById('hand-container');
+        const boardContainer = document.getElementById('board-container');
+        const emptyState = document.getElementById('empty-state');
+        const progressCount = document.getElementById('progress-count');
+        const boardScroll = document.getElementById('board-scroll');
+
+        // Fisher-Yates Shuffle
+        function shuffleArray(array) {
+            let curId = array.length;
+            while (0 !== curId) {
+                let randId = Math.floor(Math.random() * curId);
+                curId -= 1;
+                let tmp = array[curId];
+                array[curId] = array[randId];
+                array[randId] = tmp;
+            }
+            return array;
+        }
+
+        function createCardHTML(card, isHand = true) {
+            const el = document.createElement('div');
+            el.className = 'domino';
+            el.dataset.id = card.id;
+            
+            el.innerHTML = `
+                <div class="domino-half ${card.lClass}">${card.left}</div>
+                <div class="divider"></div>
+                <div class="domino-half ${card.rClass}">${card.right}</div>
+            `;
+
+            if (isHand) {
+                el.addEventListener('click', () => handleCardClick(el, card));
+            } else {
+                // Board cards don't have click events
+                const wrapper = document.createElement('div');
+                wrapper.className = 'domino-container pop-in';
+                wrapper.appendChild(el);
+                return wrapper;
+            }
+            return el;
+        }
+
+        function renderHand() {
+            handContainer.innerHTML = '';
+            handCards.forEach(card => {
+                handContainer.appendChild(createCardHTML(card, true));
+            });
+        }
+
+        function renderBoard(newlyAddedCard = null) {
+            if (boardCards.length === 0) {
+                emptyState.style.opacity = '1';
+                boardContainer.innerHTML = '';
+            } else {
+                emptyState.style.opacity = '0';
+                
+                // If appending sequentially, just append the last one to avoid full re-render
+                if (newlyAddedCard) {
+                    const el = createCardHTML(newlyAddedCard, false);
+                    boardContainer.appendChild(el);
+                    
+                    // Add orange highlight briefly
+                    const innerCard = el.querySelector('.domino');
+                    innerCard.classList.add('success-highlight');
+                    setTimeout(() => {
+                        innerCard.classList.remove('success-highlight');
+                    }, 800);
+
+                    // Auto scroll to bottom
+                    setTimeout(() => {
+                        boardScroll.scrollTo({
+                            top: boardScroll.scrollHeight,
+                            behavior: 'smooth'
+                        });
+                    }, 50);
+
+                } else {
+                    // Full re-render (e.g. initialization)
+                    boardContainer.innerHTML = '';
+                    boardCards.forEach(card => {
+                        boardContainer.appendChild(createCardHTML(card, false));
+                    });
+                }
+            }
+            progressCount.innerText = boardCards.length;
+        }
+
+        function handleCardClick(cardElement, card) {
+            sfx.click(); // Always play click sound for interaction feedback
+
+            if (isAnimating) return;
+
+            // Logic: The valid card's ID must match the current expected step in the sequence
+            if (card.id === expectedNextId) {
+                // Correct move
+                sfx.success();
+                
+                // Remove from hand array
+                handCards = handCards.filter(c => c.id !== card.id);
+                // Add to board array
+                boardCards.push(card);
+                
+                expectedNextId++;
+                
+                // Update UI
+                cardElement.remove(); // Remove directly from DOM for speed
+                renderBoard(card);    // Append just the new card to board
+
+                // Check Win
+                if (boardCards.length === rawSequence.length) {
+                    setTimeout(showVictory, 600);
+                }
+            } else {
+                // Incorrect move
+                isAnimating = true;
+                sfx.error();
+                
+                cardElement.classList.add('error-shake');
+                
+                // Clean up animation class
+                setTimeout(() => {
+                    cardElement.classList.remove('error-shake');
+                    isAnimating = false;
+                }, 400);
+            }
+        }
+
+        function showVictory() {
+            sfx.victory();
+            const modal = document.getElementById('victory-modal');
+            const box = document.getElementById('victory-box');
+            modal.classList.remove('hidden');
+            
+            // Trigger reflow for transition
+            void modal.offsetWidth; 
+            
+            modal.classList.remove('opacity-0');
+            box.classList.remove('scale-90');
+            box.classList.add('scale-100');
+        }
+
+        function hideVictory() {
+            const modal = document.getElementById('victory-modal');
+            const box = document.getElementById('victory-box');
+            modal.classList.add('opacity-0');
+            box.classList.remove('scale-100');
+            box.classList.add('scale-90');
+            
+            setTimeout(() => {
+                modal.classList.add('hidden');
+            }, 300);
+        }
+
+        function initGame() {
+            hideVictory();
+            expectedNextId = 0;
+            isAnimating = false;
+            
+            // Map raw data to include an ID representing its required position
+            cards = rawSequence.map((data, index) => ({ ...data, id: index }));
+            
+            handCards = shuffleArray([...cards]);
+            boardCards = [];
+
+            renderHand();
+            renderBoard(); // Full re-render to clear
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', initGame);
+
+        // Global click to init audio context on iOS/browsers that require user gesture
+        document.body.addEventListener('touchstart', initAudio, { once: true });
+        document.body.addEventListener('click', initAudio, { once: true });
+    </script>
+</body>
+</html>
